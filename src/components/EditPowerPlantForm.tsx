@@ -2,22 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { PowerPlant, UpdatePowerPlantData } from '@/lib/supabase'
+import { parseAddress, validateAddress } from '@/lib/addressParser'
 
 interface EditPowerPlantFormProps {
   powerPlant: PowerPlant
   onSubmit: (id: number, data: UpdatePowerPlantData) => void
   onCancel: () => void
 }
-
-const prefectures = [
-  '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
-  '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
-  '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県',
-  '静岡県', '愛知県', '三重県', '滋賀県', '京都府', '大阪府', '兵庫県',
-  '奈良県', '和歌山県', '鳥取県', '島根県', '岡山県', '広島県', '山口県',
-  '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
-  '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'
-]
 
 const categories = [
   '住宅用太陽光発電',
@@ -31,11 +22,9 @@ const categories = [
 ]
 
 export default function EditPowerPlantForm({ powerPlant, onSubmit, onCancel }: EditPowerPlantFormProps) {
-  const [formData, setFormData] = useState<UpdatePowerPlantData>({
+  const [formData, setFormData] = useState<Omit<UpdatePowerPlantData, 'prefecture' | 'city'>>({
     plant_name: powerPlant.plant_name,
     plant_address: powerPlant.plant_address,
-    prefecture: powerPlant.prefecture,
-    city: powerPlant.city,
     owner: powerPlant.owner,
     dc_capacity: powerPlant.dc_capacity,
     ac_capacity: powerPlant.ac_capacity,
@@ -43,18 +32,24 @@ export default function EditPowerPlantForm({ powerPlant, onSubmit, onCancel }: E
     category: powerPlant.category
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [parsedAddress, setParsedAddress] = useState<{ prefecture: string; city: string } | null>({
+    prefecture: powerPlant.prefecture,
+    city: powerPlant.city
+  })
 
   useEffect(() => {
     setFormData({
       plant_name: powerPlant.plant_name,
       plant_address: powerPlant.plant_address,
-      prefecture: powerPlant.prefecture,
-      city: powerPlant.city,
       owner: powerPlant.owner,
       dc_capacity: powerPlant.dc_capacity,
       ac_capacity: powerPlant.ac_capacity,
       operation_start_date: powerPlant.operation_start_date,
       category: powerPlant.category
+    })
+    setParsedAddress({
+      prefecture: powerPlant.prefecture,
+      city: powerPlant.city
     })
   }, [powerPlant])
 
@@ -69,6 +64,11 @@ export default function EditPowerPlantForm({ powerPlant, onSubmit, onCancel }: E
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }))
     }
+
+    // 住所が変更された場合、解析結果をクリア
+    if (name === 'plant_address') {
+      setParsedAddress(null)
+    }
   }
 
   const validateForm = () => {
@@ -80,14 +80,12 @@ export default function EditPowerPlantForm({ powerPlant, onSubmit, onCancel }: E
 
     if (!formData.plant_address?.trim()) {
       newErrors.plant_address = '発電所住所は必須です'
-    }
-
-    if (!formData.prefecture) {
-      newErrors.prefecture = '都道府県は必須です'
-    }
-
-    if (!formData.city?.trim()) {
-      newErrors.city = '市区町村は必須です'
+    } else {
+      // 住所の妥当性をチェック
+      const addressValidation = validateAddress(formData.plant_address)
+      if (!addressValidation.isValid) {
+        newErrors.plant_address = addressValidation.error || '住所の形式が正しくありません'
+      }
     }
 
     if (!formData.owner?.trim()) {
@@ -110,7 +108,27 @@ export default function EditPowerPlantForm({ powerPlant, onSubmit, onCancel }: E
     e.preventDefault()
     
     if (validateForm()) {
-      onSubmit(powerPlant.id, formData)
+      // 住所を解析
+      const addressInfo = parseAddress(formData.plant_address || '')
+      if (!addressInfo) {
+        setErrors(prev => ({ ...prev, plant_address: '住所の解析に失敗しました' }))
+        return
+      }
+
+      // 解析結果を表示
+      setParsedAddress({
+        prefecture: addressInfo.prefecture,
+        city: addressInfo.city
+      })
+
+      // 完全なデータを作成
+      const completeData: UpdatePowerPlantData = {
+        ...formData,
+        prefecture: addressInfo.prefecture,
+        city: addressInfo.city
+      }
+
+      onSubmit(powerPlant.id, completeData)
     }
   }
 
@@ -159,53 +177,6 @@ export default function EditPowerPlantForm({ powerPlant, onSubmit, onCancel }: E
             />
             {errors.owner && (
               <p className="mt-1 text-sm text-red-600">{errors.owner}</p>
-            )}
-          </div>
-
-          {/* 都道府県 */}
-          <div>
-            <label htmlFor="prefecture" className="block text-sm font-medium text-gray-700 mb-2">
-              都道府県 *
-            </label>
-            <select
-              id="prefecture"
-              name="prefecture"
-              value={formData.prefecture || ''}
-              onChange={handleChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.prefecture ? 'border-red-500' : 'border-gray-300'
-              }`}
-            >
-              <option value="">都道府県を選択</option>
-              {prefectures.map(prefecture => (
-                <option key={prefecture} value={prefecture}>
-                  {prefecture}
-                </option>
-              ))}
-            </select>
-            {errors.prefecture && (
-              <p className="mt-1 text-sm text-red-600">{errors.prefecture}</p>
-            )}
-          </div>
-
-          {/* 市区町村 */}
-          <div>
-            <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-2">
-              市区町村 *
-            </label>
-            <input
-              type="text"
-              id="city"
-              name="city"
-              value={formData.city || ''}
-              onChange={handleChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.city ? 'border-red-500' : 'border-gray-300'
-              }`}
-              placeholder="例: 〇〇市〇〇町"
-            />
-            {errors.city && (
-              <p className="mt-1 text-sm text-red-600">{errors.city}</p>
             )}
           </div>
 
@@ -305,12 +276,32 @@ export default function EditPowerPlantForm({ powerPlant, onSubmit, onCancel }: E
             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
               errors.plant_address ? 'border-red-500' : 'border-gray-300'
             }`}
-            placeholder="例: 〇〇県〇〇市〇〇町1-2-3"
+            placeholder="例: 東京都渋谷区渋谷1-1-1"
           />
           {errors.plant_address && (
             <p className="mt-1 text-sm text-red-600">{errors.plant_address}</p>
           )}
+          <p className="mt-1 text-sm text-gray-500">
+            住所を入力すると、都道府県と市区町村が自動的に解析されます
+          </p>
         </div>
+
+        {/* 解析結果の表示 */}
+        {parsedAddress && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-blue-800 mb-2">住所解析結果</h3>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-blue-600 font-medium">都道府県:</span>
+                <span className="ml-2 text-blue-800">{parsedAddress.prefecture}</span>
+              </div>
+              <div>
+                <span className="text-blue-600 font-medium">市区町村:</span>
+                <span className="ml-2 text-blue-800">{parsedAddress.city}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ボタン */}
         <div className="flex justify-end space-x-4">
