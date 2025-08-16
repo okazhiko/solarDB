@@ -3,25 +3,13 @@
 import { useState } from 'react'
 import { usePowerPlants } from '@/hooks/usePowerPlants'
 import { PowerPlant } from '@/lib/supabase'
-import PowerPlantForm from '@/components/PowerPlantForm'
 import EditPowerPlantForm from '@/components/EditPowerPlantForm'
 import PowerPlantCard from '@/components/PowerPlantCard'
 
 export default function Home() {
-  const { powerPlants, loading, error, createPowerPlant, updatePowerPlant, deletePowerPlant } = usePowerPlants()
-  const [showCreateForm, setShowCreateForm] = useState(false)
+  const { powerPlants, loading, error, updatePowerPlant, deletePowerPlant } = usePowerPlants()
   const [editingPowerPlant, setEditingPowerPlant] = useState<PowerPlant | null>(null)
   const [pageError, setPageError] = useState<string | null>(null)
-
-  const handleCreatePowerPlant = async (powerPlantData: any) => {
-    try {
-      await createPowerPlant(powerPlantData)
-      setShowCreateForm(false)
-      setPageError(null)
-    } catch (err) {
-      setPageError('発電所データの作成に失敗しました')
-    }
-  }
 
   const handleUpdatePowerPlant = async (id: number, powerPlantData: any) => {
     try {
@@ -69,12 +57,12 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-6 py-8">
         <div className="max-w-7xl mx-auto">
           {/* ヘッダー */}
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">発電所管理システム</h1>
-            <p className="text-gray-600">Next.js + Supabase で作成された発電所データ管理システム</p>
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">ダッシュボード</h1>
+            <p className="text-gray-600">発電所データの概要と統計情報</p>
           </div>
 
           {/* エラーメッセージ */}
@@ -135,26 +123,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* 新規作成ボタン */}
-          <div className="mb-8 text-center">
-            <button
-              onClick={() => setShowCreateForm(true)}
-              className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-            >
-              新しい発電所を登録
-            </button>
-          </div>
-
-          {/* 新規作成フォーム */}
-          {showCreateForm && (
-            <div className="mb-8">
-              <PowerPlantForm
-                onSubmit={handleCreatePowerPlant}
-                onCancel={() => setShowCreateForm(false)}
-              />
-            </div>
-          )}
-
           {/* 編集フォーム */}
           {editingPowerPlant && (
             <div className="mb-8">
@@ -167,23 +135,30 @@ export default function Home() {
           )}
 
           {/* 発電所一覧 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {powerPlants.length === 0 ? (
-              <div className="col-span-full text-center py-12">
-                <div className="text-gray-400 text-6xl mb-4">🏭</div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">発電所データがありません</h3>
-                <p className="text-gray-500">新しい発電所を登録してください</p>
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">登録発電所一覧</h2>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {powerPlants.length === 0 ? (
+                  <div className="col-span-full text-center py-12">
+                    <div className="text-gray-400 text-6xl mb-4">🏭</div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">発電所データがありません</h3>
+                    <p className="text-gray-500">サイドバーの「発電所登録」から新しい発電所を登録してください</p>
+                  </div>
+                ) : (
+                  powerPlants.map((powerPlant) => (
+                    <PowerPlantCard
+                      key={powerPlant.id}
+                      powerPlant={powerPlant}
+                      onEdit={handleEditPowerPlant}
+                      onDelete={handleDeletePowerPlant}
+                    />
+                  ))
+                )}
               </div>
-            ) : (
-              powerPlants.map((powerPlant) => (
-                <PowerPlantCard
-                  key={powerPlant.id}
-                  powerPlant={powerPlant}
-                  onEdit={handleEditPowerPlant}
-                  onDelete={handleDeletePowerPlant}
-                />
-              ))
-            )}
+            </div>
           </div>
         </div>
       </div>
